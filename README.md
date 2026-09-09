@@ -437,3 +437,289 @@ Retest
 ```
 
 The goal is to restore the required access without unnecessarily weakening the system's security.
+
+---
+
+## Processes
+
+Linux treats running applications and services as processes. Understanding how to identify, inspect, monitor, and manage processes is essential when troubleshooting high CPU usage, memory pressure, application failures, or unexpected system behavior.
+
+### `ps`
+
+Displays information about running processes.
+
+Basic process listing:
+
+```bash
+ps
+```
+
+Display processes for all users:
+
+```bash
+ps aux
+```
+
+A common way to search for a specific process is:
+
+```bash
+ps aux | grep nginx
+```
+
+**When to use:**
+
+Useful when you need to identify which processes are running, which user owns them, and how much CPU or memory they are consuming.
+
+Useful columns from `ps aux` include:
+
+- `USER` — User that owns the process
+- `%CPU` — CPU utilization
+- `%MEM` — Memory utilization
+- `PID` — Process ID
+- `STAT` — Process state
+- `COMMAND` — Command used to start the process
+
+---
+
+### `top`
+
+Provides a real-time view of running processes and system resource usage.
+
+```bash
+top
+```
+
+`top` can be used to monitor:
+
+- CPU utilization
+- Memory utilization
+- Load average
+- Running processes
+- Process IDs
+- Individual process resource consumption
+
+**When to use:**
+
+Useful when investigating a server that appears slow or is experiencing elevated CPU or memory usage.
+
+A typical troubleshooting workflow is:
+
+```text
+System appears slow
+        ↓
+Run top
+        ↓
+Identify high CPU or memory processes
+        ↓
+Record the PID
+        ↓
+Identify the process owner
+        ↓
+Investigate the application or service
+```
+
+---
+
+### `htop`
+
+Provides an interactive alternative to `top` with an easier-to-read process view.
+
+```bash
+htop
+```
+
+Depending on the Linux distribution, `htop` may need to be installed separately.
+
+**When to use:**
+
+Useful when you need an interactive view of running processes and want to quickly sort or navigate through resource usage.
+
+**Production consideration:**
+
+Do not assume `htop` is available on every production server. `top` is generally more universally available.
+
+---
+
+### `pgrep`
+
+Searches for processes by name or other attributes and returns their process IDs.
+
+```bash
+pgrep nginx
+```
+
+Include the process name in the output:
+
+```bash
+pgrep -a nginx
+```
+
+**When to use:**
+
+Useful when you need to quickly identify the PID of a known application or service without manually searching through the entire process list.
+
+---
+
+### `kill`
+
+Sends a signal to a process.
+
+Terminate a process gracefully:
+
+```bash
+kill PID
+```
+
+For example:
+
+```bash
+kill 12345
+```
+
+If a process does not respond, a stronger signal can be used:
+
+```bash
+kill -9 12345
+```
+
+**When to use:**
+
+Useful when a process needs to be stopped or restarted and normal service controls are not sufficient.
+
+**Production consideration:**
+
+`kill -9` should not be the first response. It immediately terminates the process and does not allow the application an opportunity to shut down cleanly.
+
+Whenever possible, attempt a normal termination first and investigate why the process is unresponsive before using a forceful signal.
+
+---
+
+### `pkill`
+
+Terminates processes based on their name or other matching criteria.
+
+```bash
+pkill process-name
+```
+
+**When to use:**
+
+Useful when you need to terminate processes based on their name rather than locating individual PIDs.
+
+**Production consideration:**
+
+Use `pkill` carefully. A broad match can terminate multiple processes at once.
+
+Always verify the matching processes before using a destructive command.
+
+---
+
+### Process Ownership
+
+Identifying the user that owns a process can provide important context during troubleshooting.
+
+```bash
+ps aux
+```
+
+Example:
+
+```text
+USER       PID  %CPU  %MEM  COMMAND
+www-data  1234  85.2   2.1  php-fpm
+```
+
+In this example:
+
+```text
+User: www-data
+PID: 1234
+CPU: 85.2%
+Memory: 2.1%
+```
+
+**When to use:**
+
+Process ownership can help determine which application, service, or user is responsible for unexpected resource consumption.
+
+---
+
+### High CPU Troubleshooting
+
+When a server experiences unusually high CPU utilization, avoid immediately terminating processes.
+
+Start by identifying what is consuming the CPU:
+
+```bash
+top
+```
+
+or:
+
+```bash
+ps aux --sort=-%cpu | head
+```
+
+Then identify the process:
+
+```bash
+ps -fp PID
+```
+
+Check which user owns it:
+
+```bash
+ps -o user,pid,ppid,%cpu,%mem,cmd -p PID
+```
+
+A practical troubleshooting workflow is:
+
+```text
+High CPU detected
+        ↓
+Identify highest CPU processes
+        ↓
+Record PID and process owner
+        ↓
+Determine application/service
+        ↓
+Review logs and recent changes
+        ↓
+Determine whether the behavior is expected
+        ↓
+Take the least disruptive corrective action
+        ↓
+Monitor CPU utilization
+        ↓
+Confirm system stability
+```
+
+**Production consideration:**
+
+High CPU utilization is a symptom, not necessarily the root cause. Before terminating a process, determine whether it is performing legitimate work such as a backup, deployment, database operation, or scheduled task.
+
+---
+
+### Process Monitoring During an Incident
+
+When investigating production performance issues, process information can be combined with other system metrics.
+
+Useful commands include:
+
+```bash
+top
+ps aux
+free -h
+df -h
+uptime
+```
+
+This helps establish whether the issue is primarily related to:
+
+- CPU
+- Memory
+- Disk space
+- System load
+- Individual processes
+
+The objective is to establish a baseline, identify the abnormal behavior, and determine the underlying cause before taking corrective action.
