@@ -723,3 +723,298 @@ This helps establish whether the issue is primarily related to:
 - Individual processes
 
 The objective is to establish a baseline, identify the abnormal behavior, and determine the underlying cause before taking corrective action.
+
+---
+
+## CPU & Memory
+
+CPU and memory utilization are important indicators of overall system health. When a production server becomes slow or unstable, understanding resource utilization helps determine whether the problem is related to CPU saturation, memory pressure, individual processes, or another underlying issue.
+
+### `uptime`
+
+Displays how long the system has been running, the number of logged-in users, and system load averages.
+
+```bash
+uptime
+```
+
+Example:
+
+```text
+20:15:32 up 12 days,  4:27,  2 users,  load average: 1.25, 1.10, 0.98
+```
+
+The load averages represent system load over approximately:
+
+```text
+1 minute
+5 minutes
+15 minutes
+```
+
+**When to use:**
+
+Useful as an initial check when a server appears slow or unresponsive.
+
+Load average should be interpreted relative to the number of available CPU cores. A load average of `4` may be significant on a 2-core system but much less concerning on a 16-core system.
+
+---
+
+### `free`
+
+Displays memory and swap usage.
+
+```bash
+free -h
+```
+
+The `-h` option displays values in a human-readable format.
+
+Example:
+
+```text
+               total        used        free      shared  buff/cache   available
+Mem:            16Gi        8Gi         2Gi        512Mi        6Gi         7Gi
+Swap:            2Gi        0Gi         2Gi
+```
+
+Important fields include:
+
+- `total` — Total physical memory
+- `used` — Memory currently being used
+- `free` — Completely unused memory
+- `buff/cache` — Memory used for buffers and filesystem cache
+- `available` — Estimated memory available for new applications
+- `Swap` — Disk space being used as virtual memory
+
+**When to use:**
+
+Useful when investigating memory-related performance problems or determining whether a server is experiencing memory pressure.
+
+**Production consideration:**
+
+Do not assume that low `free` memory automatically means the server is out of memory. Linux intentionally uses available memory for filesystem caching. The `available` value is generally more useful when assessing whether applications can allocate additional memory.
+
+---
+
+### `top`
+
+`top` provides both CPU and memory information while continuously updating.
+
+```bash
+top
+```
+
+Useful information includes:
+
+- Overall CPU utilization
+- Memory utilization
+- Load average
+- Running processes
+- Process CPU usage
+- Process memory usage
+
+**When to use:**
+
+Useful during active incidents when you need to determine whether CPU or memory is contributing to system performance problems.
+
+---
+
+### Checking CPU Usage
+
+List processes sorted by CPU utilization:
+
+```bash
+ps aux --sort=-%cpu | head
+```
+
+This can quickly identify processes consuming the most CPU.
+
+For a specific process:
+
+```bash
+ps -o pid,ppid,user,%cpu,%mem,cmd -p PID
+```
+
+**When to use:**
+
+Useful when system-level CPU utilization is elevated and you need to identify the process responsible.
+
+---
+
+### Checking Memory Usage
+
+List processes sorted by memory utilization:
+
+```bash
+ps aux --sort=-%mem | head
+```
+
+For a specific process:
+
+```bash
+ps -o pid,ppid,user,%cpu,%mem,cmd -p PID
+```
+
+**When to use:**
+
+Useful when investigating memory pressure and identifying processes consuming unusually large amounts of RAM.
+
+---
+
+### Understanding Load Average
+
+Load average represents the average number of tasks waiting for or actively using CPU resources, along with tasks in certain uninterruptible states.
+
+View load average with:
+
+```bash
+uptime
+```
+
+or:
+
+```bash
+cat /proc/loadavg
+```
+
+Example:
+
+```text
+1.25 1.10 0.98 2/315 12345
+```
+
+The first three values represent the 1-, 5-, and 15-minute load averages.
+
+**Production consideration:**
+
+Load average should always be considered alongside CPU count and other system metrics. A high load average does not automatically mean that CPU utilization is the root cause.
+
+---
+
+### Checking CPU Count
+
+Determine the number of available processors:
+
+```bash
+nproc
+```
+
+Or:
+
+```bash
+lscpu
+```
+
+**When to use:**
+
+Useful when interpreting load averages and determining how much CPU capacity is available to the system.
+
+---
+
+### Memory Pressure Troubleshooting
+
+When investigating possible memory-related problems, start with:
+
+```bash
+free -h
+```
+
+Then identify memory-heavy processes:
+
+```bash
+ps aux --sort=-%mem | head
+```
+
+Check overall process activity:
+
+```bash
+top
+```
+
+A practical workflow is:
+
+```text
+Application appears slow
+        ↓
+Check system load
+        ↓
+Check memory availability
+        ↓
+Identify resource-heavy processes
+        ↓
+Determine whether behavior is expected
+        ↓
+Review application and system logs
+        ↓
+Investigate the underlying cause
+        ↓
+Monitor system behavior
+```
+
+---
+
+### CPU Troubleshooting
+
+When CPU utilization is unexpectedly high:
+
+```text
+High CPU detected
+        ↓
+Check load average
+        ↓
+Check CPU count
+        ↓
+Identify high-CPU processes
+        ↓
+Identify process owner
+        ↓
+Determine the application or service
+        ↓
+Review logs and recent changes
+        ↓
+Determine root cause
+        ↓
+Take the least disruptive corrective action
+        ↓
+Continue monitoring
+```
+
+Useful commands:
+
+```bash
+uptime
+nproc
+top
+ps aux --sort=-%cpu | head
+```
+
+**Production consideration:**
+
+Avoid treating CPU utilization as the root cause by itself. High CPU can be caused by legitimate workloads, application behavior, traffic spikes, scheduled jobs, inefficient queries, runaway processes, or other underlying conditions.
+
+---
+
+### CPU and Memory During Production Incidents
+
+CPU and memory metrics should be evaluated together with application behavior and other system indicators.
+
+Useful commands include:
+
+```bash
+uptime
+free -h
+top
+ps aux --sort=-%cpu | head
+ps aux --sort=-%mem | head
+```
+
+The objective is to establish whether the system is experiencing:
+
+- CPU saturation
+- Memory pressure
+- Excessive process activity
+- High system load
+- An application-specific resource issue
+
+Resource utilization should be correlated with logs, monitoring data, recent deployments, traffic patterns, and other available metrics before determining the root cause.
