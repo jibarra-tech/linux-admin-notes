@@ -1362,3 +1362,370 @@ Before removing anything:
 7. Verify that the application remains healthy afterward.
 
 The goal is not simply to create free space. The goal is to identify **why the filesystem filled up and prevent the issue from recurring**.
+
+## Networking
+
+Network troubleshooting is an important part of diagnosing production issues.
+
+When a website or service appears to be unavailable, the problem may exist at several different layers:
+
+- DNS resolution
+- Network connectivity
+- Routing
+- Listening services
+- HTTP/HTTPS connectivity
+- Web server configuration
+- Application behavior
+
+The goal is to determine **which layer is failing** before making changes.
+
+---
+
+### `ip`
+
+Display network interfaces and IP addresses.
+
+```bash
+ip addr
+```
+
+Display routing information:
+
+```bash
+ip route
+```
+
+### When to use
+
+Useful when verifying:
+
+- Network interfaces
+- Assigned IP addresses
+- Default gateways
+- Routing configuration
+- Whether an interface is up
+
+### Production troubleshooting
+
+If a server cannot communicate with another system, checking the interface and routing table can help determine whether the problem exists at the host networking layer.
+
+---
+
+### `ss`
+
+Display listening ports and network connections.
+
+```bash
+ss -tuln
+```
+
+Common options:
+
+- `-t` — TCP connections
+- `-u` — UDP connections
+- `-l` — Listening sockets
+- `-n` — Display numerical addresses and ports
+
+For example:
+
+```bash
+ss -tuln
+```
+
+can help determine whether services are listening on expected ports such as:
+
+```text
+80    HTTP
+443   HTTPS
+22    SSH
+```
+
+### When to use
+
+Useful when:
+
+- A service appears to be running but cannot be reached
+- Verifying whether a port is listening
+- Investigating unexpected connections
+- Troubleshooting web server availability
+
+### Production troubleshooting
+
+If a website is returning connection errors, checking whether the expected service is actually listening can quickly narrow the problem.
+
+---
+
+### `ping`
+
+Test basic network reachability.
+
+```bash
+ping example.com
+```
+
+A specific number of packets can be sent with:
+
+```bash
+ping -c 4 example.com
+```
+
+### When to use
+
+Useful for testing basic connectivity between systems.
+
+### Important consideration
+
+A failed `ping` does **not necessarily mean a host is down**.
+
+ICMP traffic may be blocked by:
+
+- Firewalls
+- Security groups
+- Network policies
+- Hosting providers
+
+Therefore, `ping` should be treated as one troubleshooting signal rather than definitive proof that a service is unavailable.
+
+---
+
+### `curl`
+
+Test HTTP and HTTPS connectivity directly.
+
+```bash
+curl -I https://example.com
+```
+
+The `-I` option requests response headers without downloading the full response body.
+
+For more detailed troubleshooting:
+
+```bash
+curl -v https://example.com
+```
+
+### When to use
+
+Useful for determining:
+
+- Whether HTTP/HTTPS is responding
+- HTTP status codes
+- Redirect behavior
+- TLS/SSL issues
+- Response headers
+- Connection problems
+
+Example:
+
+```bash
+curl -I https://example.com
+```
+
+A response such as:
+
+```text
+HTTP/2 200
+```
+
+indicates that the request successfully reached the web service and received a successful response.
+
+A response such as:
+
+```text
+HTTP/1.1 502 Bad Gateway
+```
+
+indicates that the request reached a web-facing service, but an upstream service may be failing.
+
+### Production troubleshooting
+
+`curl` is particularly useful because it tests the actual application protocol rather than simply testing whether the host responds to network traffic.
+
+---
+
+### `dig`
+
+Perform DNS lookups.
+
+```bash
+dig example.com
+```
+
+Query a specific record type:
+
+```bash
+dig example.com A
+```
+
+Query an AAAA record:
+
+```bash
+dig example.com AAAA
+```
+
+Query nameservers:
+
+```bash
+dig example.com NS
+```
+
+### When to use
+
+Useful for investigating:
+
+- DNS resolution
+- A records
+- AAAA records
+- Nameservers
+- DNS configuration
+- Unexpected DNS responses
+
+### Production troubleshooting
+
+If a customer reports that a website is unavailable, DNS should be verified before assuming the web server itself is down.
+
+A DNS issue can make a healthy server appear completely unavailable.
+
+---
+
+### `nslookup`
+
+Perform a quick DNS lookup.
+
+```bash
+nslookup example.com
+```
+
+Specify a DNS server:
+
+```bash
+nslookup example.com 8.8.8.8
+```
+
+### When to use
+
+Useful for quickly comparing DNS responses from different resolvers.
+
+For example, comparing the result from the local resolver against a public resolver can help identify potential DNS propagation or resolver-specific issues.
+
+---
+
+### `traceroute`
+
+Display the network path toward a destination.
+
+```bash
+traceroute example.com
+```
+
+### When to use
+
+Useful when investigating potential routing or connectivity problems between systems.
+
+It can help identify where traffic may stop responding along the network path.
+
+### Important consideration
+
+Traceroute results should not automatically be interpreted as proof that a specific router or network device is broken.
+
+Some devices intentionally:
+
+- Drop traceroute packets
+- Rate-limit responses
+- Hide information
+
+Use traceroute as supporting evidence alongside other tests.
+
+---
+
+## Networking Troubleshooting Workflow
+
+When a website or service appears to be unavailable, work through the problem methodically.
+
+### 1. Verify DNS
+
+```bash
+dig example.com
+```
+
+Determine whether the hostname resolves to the expected address.
+
+### 2. Test basic connectivity
+
+```bash
+ping -c 4 example.com
+```
+
+Remember that ICMP may be blocked, so a failed ping does not automatically indicate an outage.
+
+### 3. Test HTTP/HTTPS directly
+
+```bash
+curl -I https://example.com
+```
+
+Look at:
+
+- HTTP status code
+- Redirects
+- Response headers
+- Connection failures
+
+### 4. Check the network path if necessary
+
+```bash
+traceroute example.com
+```
+
+Use this when the evidence suggests a routing or connectivity issue.
+
+### 5. If you have server access, inspect networking
+
+```bash
+ip addr
+ip route
+ss -tuln
+```
+
+Verify:
+
+- Interfaces are configured correctly
+- Routes are present
+- Expected services are listening
+
+### 6. Correlate the evidence
+
+Do not rely on a single command.
+
+A stronger troubleshooting conclusion comes from correlating multiple signals:
+
+```text
+DNS resolves
+    ↓
+Network connectivity appears normal
+    ↓
+Port 443 is reachable
+    ↓
+HTTP returns 502
+    ↓
+Investigate web server / upstream application
+```
+
+The goal is to identify the failing layer before making changes.
+
+---
+
+## Production Troubleshooting Principles
+
+When troubleshooting networking issues in production:
+
+- Start with the simplest test
+- Work from the network layer toward the application layer
+- Use multiple sources of evidence
+- Do not assume a failed ping means the server is down
+- Verify DNS before troubleshooting the application
+- Use `curl` to test the actual HTTP/HTTPS service
+- Confirm listening ports when server access is available
+- Avoid making configuration changes until the failure point is understood
+- Document findings and evidence
+- Verify service health after remediation
