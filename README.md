@@ -1018,3 +1018,347 @@ The objective is to establish whether the system is experiencing:
 - An application-specific resource issue
 
 Resource utilization should be correlated with logs, monitoring data, recent deployments, traffic patterns, and other available metrics before determining the root cause.
+
+---
+
+## Disk & Storage
+
+Disk utilization is a common source of production issues. A filesystem approaching capacity can cause applications to fail, logs to stop writing, databases to behave unexpectedly, and services to become unstable.
+
+When troubleshooting disk-related problems, the goal is to determine **which filesystem is affected, what is consuming the space, and whether the usage is expected**.
+
+### `df`
+
+Displays available and used filesystem space.
+
+```bash
+df -h
+```
+
+The `-h` option displays sizes in human-readable units.
+
+Example:
+
+```text
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/sda1        50G   42G  5.5G  89% /
+```
+
+Important columns include:
+
+- `Filesystem` — Device or filesystem
+- `Size` — Total filesystem capacity
+- `Used` — Space currently in use
+- `Avail` — Available space
+- `Use%` — Percentage of space used
+- `Mounted on` — Filesystem mount point
+
+**When to use:**
+
+Useful as an initial check when a server reports disk-space problems or when an application begins failing unexpectedly.
+
+---
+
+### `du`
+
+Displays disk usage for files and directories.
+
+Check the size of a directory:
+
+```bash
+du -sh /path/to/directory
+```
+
+Check the size of items in the current directory:
+
+```bash
+du -sh *
+```
+
+**When to use:**
+
+Useful when `df` indicates that a filesystem is filling up and you need to determine which directories are consuming the available space.
+
+---
+
+### Combining `du` with `sort`
+
+Sort directory sizes from smallest to largest:
+
+```bash
+du -sh * | sort -h
+```
+
+Display the largest directories first:
+
+```bash
+du -sh * | sort -hr
+```
+
+**When to use:**
+
+Useful when quickly identifying which directories are consuming the most disk space.
+
+A common investigation might look like:
+
+```bash
+cd /path/to/filesystem
+du -sh * | sort -hr
+```
+
+Then move into the largest directory and repeat the process.
+
+---
+
+### Finding Large Files
+
+Use `find` to identify files larger than a specified size.
+
+Find files larger than 1 GB:
+
+```bash
+find /path -type f -size +1G
+```
+
+Find files larger than 500 MB:
+
+```bash
+find /path -type f -size +500M
+```
+
+Include file sizes in the output:
+
+```bash
+find /path -type f -size +500M -exec ls -lh {} \;
+```
+
+**When to use:**
+
+Useful when directory-level analysis identifies an area consuming significant disk space and you need to locate individual large files.
+
+Potential sources of unexpected disk usage include:
+
+- Application logs
+- Backup files
+- Temporary files
+- Cache files
+- Database dumps
+- Uploaded media
+- Core dumps
+- Old archives
+
+---
+
+### Checking Individual File Sizes
+
+Use `ls -lh` to display file sizes in human-readable format:
+
+```bash
+ls -lh
+```
+
+For a specific file:
+
+```bash
+ls -lh filename
+```
+
+**When to use:**
+
+Useful when inspecting individual files identified during disk-space investigations.
+
+---
+
+### Inode Usage
+
+Disk space and inode availability are separate resources.
+
+Check inode utilization with:
+
+```bash
+df -i
+```
+
+Example:
+
+```text
+Filesystem      Inodes  IUsed   IFree IUse% Mounted on
+/dev/sda1      3276800  327000 2949800   10% /
+```
+
+Important fields include:
+
+- `Inodes` — Total available inodes
+- `IUsed` — Inodes currently in use
+- `IFree` — Available inodes
+- `IUse%` — Percentage of inodes used
+
+**When to use:**
+
+Useful when a filesystem reports that it cannot create new files even though `df -h` shows plenty of available disk space.
+
+A system can run out of inodes when it contains an extremely large number of small files.
+
+**Production consideration:**
+
+If inode usage is at or near 100%, deleting or consolidating large numbers of unnecessary small files may be necessary. Always identify the source before removing files.
+
+---
+
+### Disk Space vs. Inode Exhaustion
+
+These two conditions can look similar but have different causes.
+
+#### Disk Space Exhaustion
+
+Check:
+
+```bash
+df -h
+```
+
+Possible causes include:
+
+- Large log files
+- Backups
+- Database dumps
+- Uploaded files
+- Application data
+- Temporary files
+
+#### Inode Exhaustion
+
+Check:
+
+```bash
+df -i
+```
+
+Possible causes include:
+
+- Extremely large numbers of small files
+- Application-generated temporary files
+- Cache directories
+- Session files
+- Mail queues
+- Log or spool directories
+
+The correct diagnostic command depends on the symptom being observed.
+
+---
+
+### Finding the Largest Directories
+
+A common investigation pattern is to start at the affected filesystem and progressively narrow the search.
+
+```bash
+df -h
+```
+
+Identify the affected mount point, then:
+
+```bash
+du -sh /path/* | sort -hr
+```
+
+Move into the largest directory:
+
+```bash
+cd /path/to/largest-directory
+```
+
+Repeat:
+
+```bash
+du -sh * | sort -hr
+```
+
+Continue until the source of the disk usage is identified.
+
+This approach avoids immediately scanning the entire filesystem and helps narrow the investigation systematically.
+
+---
+
+### Deleted Files Still Using Disk Space
+
+A file can be deleted from the filesystem while a running process continues to hold the file open.
+
+In this situation:
+
+```bash
+df -h
+```
+
+may report high disk usage even though:
+
+```bash
+du -sh
+```
+
+does not appear to account for all of the space.
+
+Open deleted files can be investigated with:
+
+```bash
+lsof +L1
+```
+
+**When to use:**
+
+Useful when there is a discrepancy between filesystem usage reported by `df` and the space that appears to be accounted for by `du`.
+
+**Production consideration:**
+
+Do not immediately restart or terminate the process holding the deleted file. First identify the process and determine whether restarting it is safe.
+
+---
+
+### Disk Full Troubleshooting Workflow
+
+When a production server reports a disk-space problem:
+
+```text
+Disk-space alert
+        ↓
+Check filesystem utilization
+        ↓
+df -h
+        ↓
+Identify affected filesystem
+        ↓
+Check inode utilization
+        ↓
+df -i
+        ↓
+Identify largest directories
+        ↓
+du -sh * | sort -hr
+        ↓
+Locate large files if necessary
+        ↓
+find /path -type f -size +500M
+        ↓
+Determine whether usage is expected
+        ↓
+Identify safe cleanup opportunities
+        ↓
+Monitor filesystem utilization
+```
+
+---
+
+### Production Considerations
+
+Disk cleanup should never begin with blindly deleting files.
+
+Before removing anything:
+
+1. Identify what is consuming the space.
+2. Determine whether the files are expected.
+3. Check whether the files are actively being used.
+4. Determine whether the files are required for application operation, backups, auditing, or compliance.
+5. Identify whether a retention or rotation policy should be adjusted.
+6. Make the smallest safe change.
+7. Verify that the application remains healthy afterward.
+
+The goal is not simply to create free space. The goal is to identify **why the filesystem filled up and prevent the issue from recurring**.
